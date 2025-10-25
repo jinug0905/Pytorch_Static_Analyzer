@@ -1,0 +1,43 @@
+graph(%self.1 : __torch__.SimpleMLP,
+      %x.1 : Tensor):
+  %fc2.1 = prim::GetAttr[name="fc2"](%self.1)
+  %relu.1 = prim::GetAttr[name="relu"](%self.1)
+  %fc1.1 = prim::GetAttr[name="fc1"](%self.1)
+  %bias.2 = prim::GetAttr[name="bias"](%fc1.1)
+  %weight.2 = prim::GetAttr[name="weight"](%fc1.1)
+  %10 = aten::linear(%x.1, %weight.2, %bias.2)
+  %11 = aten::relu(%10)
+  %bias.1 = prim::GetAttr[name="bias"](%fc2.1)
+  %weight.1 = prim::GetAttr[name="weight"](%fc2.1)
+  %14 = aten::linear(%11, %weight.1, %bias.1)
+  return (%14)
+
+
+  -=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+  prim::GetAttr nodes retrieve submodules and their tensors (weights/bias).
+  aten::linear and aten::relu nodes create activation tensors (%10, %11, %14).
+
+
+
+
+
+
+
+
+
+
+
+  -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+graph(%self.1 : __torch__.SimpleMLP,
+      %x : Float(8, 32, strides=[32, 1], requires_grad=0, device=cpu)):
+  %fc2 : __torch__.torch.nn.modules.linear.___torch_mangle_0.Linear = prim::GetAttr[name="fc2"](%self.1)
+  %relu : __torch__.torch.nn.modules.activation.ReLU = prim::GetAttr[name="relu"](%self.1)
+  %fc1 : __torch__.torch.nn.modules.linear.Linear = prim::GetAttr[name="fc1"](%self.1)
+  %bias.1 : Tensor = prim::GetAttr[name="bias"](%fc1)
+  %weight.1 : Tensor = prim::GetAttr[name="weight"](%fc1)
+  %input.1 : Float(8, 64, strides=[64, 1], requires_grad=0, device=cpu) = aten::linear(%x, %weight.1, %bias.1), scope: __module.fc1 # /sw/eb/sw/PyTorch/2.0.1-foss-2022a/lib/python3.10/site-packages/torch/nn/modules/linear.py:114:0
+  %input : Float(8, 64, strides=[64, 1], requires_grad=0, device=cpu) = aten::relu(%input.1), scope: __module.relu # /sw/eb/sw/PyTorch/2.0.1-foss-2022a/lib/python3.10/site-packages/torch/nn/functional.py:1457:0
+  %bias : Tensor = prim::GetAttr[name="bias"](%fc2)
+  %weight : Tensor = prim::GetAttr[name="weight"](%fc2)
+  %14 : Float(8, 10, strides=[10, 1], requires_grad=0, device=cpu) = aten::linear(%input, %weight, %bias), scope: __module.fc2 # /sw/eb/sw/PyTorch/2.0.1-foss-2022a/lib/python3.10/site-packages/torch/nn/modules/linear.py:114:0
+  return (%14)

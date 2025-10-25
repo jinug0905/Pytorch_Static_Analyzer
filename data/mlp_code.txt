@@ -1,0 +1,7 @@
+def forward(self,
+    x: Tensor) -> Tensor:
+  fc2 = self.fc2
+  relu = self.relu
+  fc1 = self.fc1
+  _0 = (fc2).forward((relu).forward((fc1).forward(x, ), ), )
+  return _0
