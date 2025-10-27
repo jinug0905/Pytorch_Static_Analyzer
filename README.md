@@ -1,137 +1,163 @@
-# Pytorch_Static_Analyzer
-This project implements a static memory analysis tool for PyTorch TorchScript models. Specifically designed for deployment scenarios on resource-constrained systems, it statically estimates the peak GPU memory required for inference without running the model.
+# PyTorch Static Analyzer
 
-PYTORCH STATIC ANALYZER — BUILD SYSTEM DOCUMENTATION
+A static memory analysis tool for PyTorch **TorchScript** models — designed for deployment scenarios on resource‑constrained systems. It estimates the peak **GPU memory usage for inference** without executing the model.
 
-Author: Jinug Lee
-Environment: Texas A&M Grace HPC Cluster
-Last Updated: October 2025
+---
 
-1. OVERVIEW
------------
-This document explains how and why the CMakeLists.txt file in this project was written.
+## Project Information
 
-The goal of the build system is to compile a C++ static analyzer that reads and analyzes
-a TorchScript model (e.g., resnet50_scripted.pt) to estimate its memory usage using
-PyTorch’s internal JIT IR (Intermediate Representation).
+**Author:** Jinug Lee  
+**Environment:** Texas A&M Grace HPC Cluster  
+**Last Updated:** October 2025  
 
-Grace HPC uses a module-based software system, so instead of installing PyTorch manually,
-the build configuration leverages existing cluster modules for:
+---
 
-• PyTorch 2.7.0-foss-2023b (CUDA-enabled)
-• CUDA 12.9.0
-• GCCcore 13.2.0
+## 1. Overview
 
-2. FOLDER STRUCTURE
--------------------
+This build system compiles a **C++ static analyzer** that reads and analyzes TorchScript models  
+(e.g., `resnet50_scripted.pt`) using PyTorch’s internal **JIT IR (Intermediate Representation)**.
+
+Instead of installing PyTorch manually, the project uses Grace HPC’s module‑based system:
+
+- PyTorch 2.7.0‑foss‑2023b (CUDA‑enabled)
+- CUDA 12.9.0
+- GCCcore 13.2.0
+
+---
+
+## 2. Folder Structure
+
+```plaintext
 staticAnalyzer/
 │
-├── 1_ExportingIR/                 (Python: exports TorchScript)
+├── 1_ExportingIR/                 # Python: exports TorchScript
 │   ├── export_model.py
 │   └── tensorirVenv/
 │
-├── 2_EstimateMem/                 (C++: performs static analysis)
+├── 2_EstimateMem/                 # C++: performs static analysis
 │   ├── CMakeLists.txt
 │   ├── main.cpp
 │   └── build/
 │
-└── data/                          (TorchScript model & IR artifacts)
+└── data/                          # TorchScript model & IR artifacts
     ├── resnet50_scripted.pt
     ├── model_ir.txt
     └── model_code.txt
+```
 
-3. DESIGN GOALS OF THE BUILD SYSTEM
------------------------------------
-The CMakeLists.txt was designed to:
-1. Automatically detect PyTorch and CUDA paths via EasyBuild environment modules.
-2. Remove the need for user-supplied -D flags.
-3. Create missing CUDA::nvToolsExt target when using CUDA 12.9 (NVTX header-only).
-4. Embed RPATH for runtime shared library discovery.
-5. Bake DATA_DIR into the binary for locating .pt models.
-6. Ensure reproducibility on any login node that loads the same modules.
+---
 
-4. ENVIRONMENT VARIABLES ON GRACE HPC
--------------------------------------
-(EBROOTPYTORCH, EBROOTCUDA) are used to locate:
-• TorchConfig.cmake
-• Torch shared libraries
-• CUDA toolkit and NVTX3 headers
+## 3. Build System Design Goals
 
-5. HOW CMAKE WORKS (STEP-BY-STEP)
----------------------------------
-• Validate environment modules
-• Locate PyTorch CMake configuration under site-packages
-• Patch NVTX
-• Import Torch targets (torch, c10, etc.)
-• Set DATA_DIR definition in compiler
-• Embed Torch library path in RPATH
+The CMake‑based build system:
 
-6. USAGE ON GRACE HPC
----------------------
-(1) Load modules
-    module purge
-    module load PyTorch/2.7.0-foss-2023b CUDA/12.9.0
+1. Automatically detects PyTorch & CUDA paths using EasyBuild modules  
+2. Eliminates the need for user‑supplied `-D` configuration flags  
+3. Creates missing `CUDA::nvToolsExt` target when using CUDA 12.9  
+4. Embeds **RPATH** for automatic shared‑library discovery  
+5. Embeds `DATA_DIR` in the binary to locate the `.pt` model  
+6. Ensures reproducibility across Grace login nodes  
 
-(2) Build
-    cd 2_EstimateMem
-    rm -rf build && mkdir build && cd build
-    cmake ..
-    cmake --build . -j
+---
 
-(3) Run analyzer
-    ./torch_ir_mem
+## 4. Environment Variables on Grace HPC
 
-7. RESULTS — STATIC ESTIMATION vs RUNTIME PROFILING
----------------------------------------------------
-"Before" = model weights + runtime contexts,
-"Peak" = max live activations during the forward pass.
+The build system uses:
+
+- `EBROOTPYTORCH` → Torch libraries + TorchConfig.cmake  
+- `EBROOTCUDA` → CUDA toolkit + NVTX3 headers  
+
+---
+
+## 5. CMake Behavior — Step‑by‑Step
+
+- Validate environment modules  
+- Locate Torch CMake config in site‑packages  
+- Patch NVTX linkage  
+- Import Torch targets (`torch`, `c10`, etc.)  
+- Define `DATA_DIR`  
+- Embed Torch library paths in RPATH  
+
+---
+
+## 6. Usage (Grace HPC)
+
+```bash
+# Load environment
+module purge
+module load PyTorch/2.7.0-foss-2023b CUDA/12.9.0
+
+# Build
+cd 2_EstimateMem
+rm -rf build && mkdir build && cd build
+cmake ..
+cmake --build . -j
+
+# Run analyzer
+./torch_ir_mem
+```
+
+---
+
+## 7. Results — Static vs Runtime Memory
 
 Batch Size = 1
------------------------------------------------
-Model       | Params (MB) | Peak Activ. (MB) | Total Est. (MB) | Runtime Peak GPU (MB)
-------------|-------------|-----------------|-----------------|---------------------
-ResNet-50   | 97.70       | 97.68           | ~195.38         | 218.29
-ResNet-101  | 170.34      | 170.33          | ~340.67         | 363.58
-VGG-16      | 527.79      | 527.79          | ~1055.58        | 1104.75
 
-✅ Observation:
-Static estimates closely match runtime GPU utilization, differing mainly by cuDNN
-workspace allocations and caching overhead.
+| Model     | Params (MB) | Peak Activ. (MB) | Total Est. (MB) | Runtime Peak GPU (MB) |
+|-----------|-------------|-----------------|-----------------|----------------------|
+| ResNet‑50 | 97.70       | 97.68           | ~195.38         | 218.29               |
+| ResNet‑101| 170.34      | 170.33          | ~340.67         | 363.58               |
+| VGG‑16    | 527.79      | 527.79          | ~1055.58        | 1104.75              |
 
-Scaling with Batch Size (Runtime — Reference Only)
----------------------------------------------------
-(bs=1 → bs=3 example)
+✅ Static results closely match runtime measurement  
+(discrepancy → cuDNN workspace + caching overhead)
 
-Model       | bs=1 Peak (MB) | bs=2 Peak (MB) | bs=3 Peak (MB)
-------------|----------------|----------------|----------------
-ResNet-50   | 218.29         | 226.99         | 237.28
-ResNet-101  | 363.58         | 372.94         | 382.12
-VGG-16      | 1104.75        | 1142.30        | 1179.67
+### Scaling Example — Runtime Reference Only
 
-✅ Memory increases nearly linearly with batch size → static prediction for other
-batch sizes is mathematically straightforward.
+| Model     | bs=1 | bs=2 | bs=3 |
+|-----------|------|------|------|
+| ResNet‑50 | 218.29 | 226.99 | 237.28 |
+| ResNet‑101| 363.58 | 372.94 | 382.12 |
+| VGG‑16    | 1104.75| 1142.30| 1179.67|
 
-8. KEY POINTS FOR THE ADVISOR
------------------------------
-• Automated build compatible with HPC module ecosystem.
-• C++ TorchScript-based static inference memory estimator.
-• Uses freeze, shape propagation, and liveness analysis in JIT IR.
-• Memory estimates align strongly with real GPU profiler measurements.
+=> Memory scales **almost linearly** → static extension for batch size >1 is trivial.
 
-9. TROUBLESHOOTING
-------------------
-• Ensure modules are loaded before building.
-• Clear build/ folder if switching modules or compiler versions.
-• If IR does not inline submodules: re-export TorchScript with freeze() applied.
+---
 
-10. FUTURE IMPROVEMENTS
------------------------
-• Full batch-size parameterization (predict N > 1 statically).
-• Visual memory timeline generation.
-• Multi-model benchmarking automation.
+## 8. Advisor Key Notes
 
-SUMMARY
--------
-This project bridges PyTorch model deployment and systems resource planning by
-providing reliable static peak memory estimation without executing the model.
-The build system is fully HPC-aware and reproducible on Texas A&M Grace infrastructure.
+- Reproducible build w/ HPC module ecosystem  
+- Static GPU inference memory estimator (no runtime needed)  
+- Uses TorchScript freeze + shape propagation + IR liveness analysis  
+- Strong accuracy correlation with profiler results  
+
+---
+
+## 9. Troubleshooting
+
+| Issue | Solution |
+|------|----------|
+| CMake finds wrong libs | Ensure modules loaded before build |
+| Runtime linker failure | Clear build/ → rebuild |
+| Missing IR inlining | Re‑export TorchScript w/ `freeze()` |
+
+---
+
+## 10. Future Work
+
+- Batch‑size parameterization beyond bs=1  
+- Memory timeline visualization  
+- Multiple‑model benchmarking automation  
+
+---
+
+## Summary
+
+This project bridges **deep learning deployment** and **system‑level planning** by providing a:
+
+>  Fast and accurate static peak GPU memory estimation  
+>  Deployable on HPC environments without model execution  
+
+The build process is **fully automated** and **Grace HPC‑friendly** ✅
+
+---
