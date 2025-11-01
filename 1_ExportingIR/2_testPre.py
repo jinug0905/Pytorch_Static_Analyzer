@@ -9,7 +9,7 @@ MODEL_NAME = 'resnet50'
 BATCH_SIZE = 1
 
 TS_DIR = '../data'
-TS_FILE = f"{MODEL_NAME}b{BATCH_SIZE}.pt"
+TS_FILE = f"{MODEL_NAME}b{BATCH_SIZE}_script.pt"
 TS_PATH = os.path.join(TS_DIR, TS_FILE)
 
 # -=-=-=-=-=- Device setup -=-=-=-=-=-
@@ -18,11 +18,13 @@ is_cuda = device.type == 'cuda'
 
 def bytes_to_mb(x): return x / (1024 ** 2)
 
+# Disable cuDNN autotuner to keep workspace allocations consistent
+torch.backends.cudnn.benchmark = False
+
 model = torch.hub.load('pytorch/vision:v0.10.0', MODEL_NAME, pretrained=True).to(device).eval()
-example_input = torch.randn(1, 3, 224, 224, device=device)
 
 with torch.no_grad():
-    scripted = torch.jit.trace(model, example_input)
+    scripted = torch.jit.script(model)
     
 scripted.save(TS_PATH)
 
@@ -45,6 +47,7 @@ with torch.no_grad():
 
 after = torch.cuda.memory_allocated(device) if is_cuda else 0
 peak = torch.cuda.max_memory_allocated(device) if is_cuda else 0
+peak_reserved = torch.cuda.max_memory_reserved(device) if is_cuda else 0
 
 # Weight memory (model resident size)
 param_bytes = sum(p.numel() * p.element_size() for p in model.parameters())
@@ -62,3 +65,4 @@ print(f"TorchScript file:      {ts_size_mb:.5f} MB")
 print(f"Allocated before:      {bytes_to_mb(before):.5f} MB")
 print(f"Allocated after:       {bytes_to_mb(after):.5f} MB")
 print(f"Peak during inference: {bytes_to_mb(peak):.5f} MB")
+print(f"Peak reserved:         {bytes_to_mb(peak_reserved):.5f} MB")
