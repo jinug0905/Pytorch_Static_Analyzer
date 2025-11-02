@@ -418,6 +418,18 @@ int main() {
     for (size_t i = 0; i < topo.size(); ++i) {
       auto* n = topo[i];
 
+      // free values whose last use is this node
+      // To prevent case where a node's output and its input overlap free first (Transient overlap)
+      for (auto it = liveSet.begin(); it != liveSet.end();) {
+        if (it->dieAt == i) {
+          liveBytes -= it->bytes;
+          it = liveSet.erase(it);
+
+        } else {
+          ++it;
+        }
+      }
+
       // skip parameter/buffer fetch nodes
       if (n->kind() == c10::prim::GetAttr) continue;
 
@@ -450,17 +462,6 @@ int main() {
         liveBytes += bytes;
 
         if (liveBytes > peakActBytes) peakActBytes = liveBytes;
-      }
-
-      // free values whose last use is this node
-      for (auto it = liveSet.begin(); it != liveSet.end();) {
-        if (it->dieAt == i) {
-          liveBytes -= it->bytes;
-          it = liveSet.erase(it);
-
-        } else {
-          ++it;
-        }
       }
     }
 
