@@ -418,49 +418,51 @@ int main() {
     for (size_t i = 0; i < topo.size(); ++i) {
       auto* n = topo[i];
 
-    /*
-      n->outputs() exerts SSA vals for each node.
-      From 
+      // skip parameter/buffer fetch nodes
+      if (n->kind() == c10::prim::GetAttr) continue;
+
+      /*
+        n->outputs() exerts SSA vals for each node.
+        From 
           %1 : Tensor = aten::conv2d(%x, %w, ...)
           %2 : Tensor = aten::relu(%1)
-      
-      we have 2 nodes : conv2d and relu
-      conv2d outputs %1
-      relu outputs %2
+        
+        we have 2 nodes : conv2d and relu
+        conv2d outputs %1
+        relu outputs %2
 
-      %1 and %2 is torch::jit::Value*.
-      which saves Shape (TensorType::sizes()), Data type (TensorType::scalarType()), Device (TensorType::device())
-    */
+        %1 and %2 is torch::jit::Value*.
+        which saves Shape (TensorType::sizes()), Data type (TensorType::scalarType()), Device (TensorType::device())
+      */
 
-    for (auto* v : n->outputs()) { 
-      auto tensorType = v->type()->cast<c10::TensorType>();
-      if (!tensorType) continue; // Skip non-tensor outputs (shapes, bool flags) -> doesn't need memory allocation
+      for (auto* v : n->outputs()) { 
+        auto tensorType = v->type()->cast<c10::TensorType>();
+        if (!tensorType) continue; // Skip non-tensor outputs (shapes, bool flags) -> doesn't need memory allocation
 
-      auto tensorSt = tensorType->scalarType();
-      if (!tensorSt.has_value()) continue;    // skip unknown dtype
+        auto tensorSt = tensorType->scalarType();
+        if (!tensorSt.has_value()) continue;    // skip unknown dtype
 
-      size_t bytes = tensor_type_nbytes(tensorType->sizes(), *tensorSt);
-      if (bytes == 0) continue; // skiip unknown shape (TensorType(shape=[?, ?, ?, ?], dtype=float)) could be error
+        size_t bytes = tensor_type_nbytes(tensorType->sizes(), *tensorSt);
+        if (bytes == 0) continue; // skiip unknown shape (TensorType(shape=[?, ?, ?, ?], dtype=float)) could be error
 
-      size_t dieAt = lastUse.count(v) ? lastUse[v] : i; // default is die now (ex last node)
-      liveSet.push_back({v, bytes, dieAt});
-      liveBytes += bytes;
+        size_t dieAt = lastUse.count(v) ? lastUse[v] : i; // default is die now (ex last node)
+        liveSet.push_back({v, bytes, dieAt});
+        liveBytes += bytes;
 
-      if (liveBytes > peakActBytes)
-        peakActBytes = liveBytes;
-    }
+        if (liveBytes > peakActBytes) peakActBytes = liveBytes;
+      }
 
-    // Kill values whose last use is this node
-    for (auto it = liveSet.begin(); it != liveSet.end();) {
-      if (it->dieAt == i) {
-        liveBytes -= it->bytes;
-        it = liveSet.erase(it);
+      // free values whose last use is this node
+      for (auto it = liveSet.begin(); it != liveSet.end();) {
+        if (it->dieAt == i) {
+          liveBytes -= it->bytes;
+          it = liveSet.erase(it);
 
-      } else {
-        ++it;
+        } else {
+          ++it;
+        }
       }
     }
-  }
 
     const size_t totalPeak = paramBytes + peakActBytes;
     std::cout << "Parameter bytes(MB):        " << bytes_to_mb(paramBytes) << "\n";
