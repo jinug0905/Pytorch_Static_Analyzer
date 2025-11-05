@@ -99,10 +99,3 @@ If you reference this project for academic or industrial work, please cite as:
 Lee, J. (2025). PyTorch Static Analyzer: A TorchScript-IR Based Memory Estimation Tool. 
 Texas A&M University.
 ```
-
----
-
-output_path = Path("/mnt/data/README_Public_Static_Analyzer.md")
-output_path.write_text(readme_text)
-
-output_path
